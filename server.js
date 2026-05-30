@@ -93,6 +93,7 @@ function buildGithubTask(event, payload, repo) {
   if (event === 'pull_request' && payload.action === 'opened')
     return { type: 'pr_opened', repo, pr_number: payload.pull_request.number,
       title: payload.pull_request.title, branch: payload.pull_request.head.ref,
+      base_branch: payload.pull_request.base.ref,
       url: payload.pull_request.html_url, timestamp: new Date().toISOString() };
 
   if (event === 'check_run' && payload.action === 'completed' && payload.check_run.conclusion === 'failure')
