@@ -1,9 +1,16 @@
 // Argus — Railway Webhook Server
 // Receives GitHub webhooks and Telegram messages, pushes tasks to Redis queue.
 
+process.on('uncaughtException', err => { console.error('UNCAUGHT:', err); process.exit(1); });
+process.on('unhandledRejection', err => { console.error('UNHANDLED:', err); });
+
 const express = require('express');
 const crypto = require('crypto');
 const Redis = require('ioredis');
+
+console.log('Starting Argus webhook server...');
+console.log('PORT:', process.env.PORT);
+console.log('REDIS_URL set:', !!process.env.REDIS_URL);
 
 const app = express();
 app.use(express.json());
