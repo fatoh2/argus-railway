@@ -1,0 +1,17 @@
+{
+  "name": "argus-railway",
+  "version": "1.0.0",
+  "description": "Argus webhook relay server — GitHub + Telegram → Redis queue",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ioredis": "^5.3.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
