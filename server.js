@@ -15,8 +15,13 @@ console.log('REDIS_URL set:', !!process.env.REDIS_URL);
 const app = express();
 app.use(express.json());
 
-const redis = new Redis(process.env.REDIS_URL, { lazyConnect: true });
-redis.connect().catch(err => console.error('Redis connect error:', err));
+const redis = new Redis(process.env.REDIS_URL, {
+  lazyConnect: true,
+  maxRetriesPerRequest: 3,
+  retryStrategy: (times) => Math.min(times * 500, 5000),
+});
+redis.on('error', (err) => console.error('[redis] error:', err.message));
+redis.connect().catch(err => console.error('[redis] connect failed:', err.message));
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
