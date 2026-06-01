@@ -133,6 +133,36 @@ function buildGithubTask(event, payload, repo) {
       base_branch: payload.pull_request.base.ref,
       url: payload.pull_request.html_url, timestamp: new Date().toISOString() };
 
+  // PR merged → close linked issue
+  if (event === 'pull_request' && payload.action === 'closed' && payload.pull_request.merged) {
+    return { type: 'pr_merged', repo, pr_number: payload.pull_request.number,
+      title: payload.pull_request.title, branch: payload.pull_request.head.ref,
+      url: payload.pull_request.html_url, timestamp: new Date().toISOString() };
+  }
+
+  // Review submitted → if REQUEST_CHANGES, agent must fix
+  if (event === 'pull_request_review' && payload.action === 'submitted') {
+    const state = payload.review?.state;
+    if (state === 'changes_requested') {
+      return { type: 'pr_changes_requested', repo,
+        pr_number: payload.pull_request.number,
+        title: payload.pull_request.title,
+        branch: payload.pull_request.head.ref,
+        url: payload.pull_request.html_url,
+        reviewer: payload.review.user.login,
+        review_body: payload.review.body || '',
+        timestamp: new Date().toISOString() };
+    }
+    if (state === 'approved') {
+      return { type: 'pr_approved', repo,
+        pr_number: payload.pull_request.number,
+        title: payload.pull_request.title,
+        url: payload.pull_request.html_url,
+        reviewer: payload.review.user.login,
+        timestamp: new Date().toISOString() };
+    }
+  }
+
   if (event === 'check_run' && payload.action === 'completed' && payload.check_run.conclusion === 'failure')
     return { type: 'ci_failed', repo, check_name: payload.check_run.name,
       branch: payload.check_run.check_suite?.head_branch,
