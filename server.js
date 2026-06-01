@@ -56,22 +56,59 @@ app.post('/webhook/github', (req, res) => {
   res.status(200).json({ ok: true });
 });
 
+// ── Telegram helpers ──────────────────────────────────────────────────────────
+async function sendTelegram(chatId, text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+    });
+  } catch (e) {
+    console.error('[telegram] send failed:', e.message);
+  }
+}
+
+function ackMessage(text, chatId) {
+  const t = text.toLowerCase().trim();
+  if (t.startsWith('assign ')) {
+    const ref = text.slice(7).trim();
+    return sendTelegram(chatId, `🚀 *Assigning ${ref}...*\nI'm on it — you'll get an update when it's done.`);
+  }
+  if (t === 'status' || t === 'status?') {
+    return sendTelegram(chatId, `🔍 *Checking status...*\nFetching latest sprint progress.`);
+  }
+  if (t.startsWith('stop')) {
+    return sendTelegram(chatId, `🛑 *Stop command received.* Halting current task.`);
+  }
+  // Generic ack for any other command
+  return sendTelegram(chatId, `⚙️ *Got it:* \`${text}\`\nProcessing...`);
+}
+
 // ── Telegram webhook ──────────────────────────────────────────────────────────
-app.post('/webhook/telegram', (req, res) => {
+app.post('/webhook/telegram', async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(200).json({ ok: true });
   if (String(message.chat?.id) !== String(process.env.TELEGRAM_CHAT_ID))
     return res.status(200).json({ ok: true });
 
+  const text = (message.text || '').trim();
+  const chatId = message.chat.id;
+
+  // Send immediate acknowledgment
+  await ackMessage(text, chatId);
+
   const task = {
     type:       'user_command',
-    text:       (message.text || '').trim(),
+    text,
     message_id: message.message_id,
-    chat_id:    message.chat.id,
+    chat_id:    chatId,
     timestamp:  new Date().toISOString(),
   };
   enqueue(task);
-  console.log(`[telegram] queued: ${task.text}`);
+  console.log(`[telegram] queued: ${text}`);
   res.status(200).json({ ok: true });
 });
 
