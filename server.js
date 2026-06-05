@@ -29,6 +29,7 @@ function enqueue(task) {
     console.error('[redis] enqueue failed:', e.message)
   );
 }
+app.locals.enqueue = enqueue;
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
@@ -41,7 +42,8 @@ app.post('/webhook/github', (req, res) => {
     if (!sig) return res.status(401).json({ error: 'missing signature' });
     const expected = 'sha256=' + crypto.createHmac('sha256', secret)
       .update(JSON.stringify(req.body)).digest('hex');
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)))
+    if (Buffer.byteLength(sig) !== Buffer.byteLength(expected) ||
+        !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)))
       return res.status(401).json({ error: 'invalid signature' });
   }
 
@@ -50,7 +52,7 @@ app.post('/webhook/github', (req, res) => {
   const task  = buildGithubTask(event, req.body, repo);
 
   if (task) {
-    enqueue(task);
+    req.app.locals.enqueue(task);
     console.log(`[github] queued ${task.type} from ${repo}`);
   }
   res.status(200).json({ ok: true });
@@ -70,7 +72,7 @@ app.post('/webhook/telegram', (req, res) => {
     chat_id:    message.chat.id,
     timestamp:  new Date().toISOString(),
   };
-  enqueue(task);
+  req.app.locals.enqueue(task);
   console.log(`[telegram] queued: ${task.text}`);
   res.status(200).json({ ok: true });
 });
@@ -109,5 +111,9 @@ function buildGithubTask(event, payload, repo) {
   return null;
 }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Argus webhook server listening on port ${PORT}`));
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`Argus webhook server listening on port ${PORT}`));
+}
+
+module.exports = { app, buildGithubTask };

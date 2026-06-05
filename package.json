@@ -5,11 +5,16 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "express": "^4.19.2",
     "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
   },
   "engines": {
     "node": ">=20.0.0"
