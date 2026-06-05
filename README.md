@@ -88,7 +88,7 @@ npm test
 
 Coverage includes:
 - Health endpoint returns OK
-- GitHub webhook signature validation (missing, invalid, valid)
-- Task building for all event types (`issue_opened`, `pr_opened` with `base_branch`)
+- GitHub webhook signature validation (missing, invalid, valid, timing-safe length check)
+- Task building for all event types (`issue_opened`, `pr_opened` with `base_branch`, `pr_merged`, `pr_changes_requested`, `pr_approved`, `ci_failed`, `push_to_main`)
 - Telegram webhook chat ID filtering (ignores wrong chat, accepts configured chat)
-- `pr_opened` tasks include `base_branch` field
+- `buildGithubTask` unit tests for each event type
