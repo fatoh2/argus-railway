@@ -58,18 +58,55 @@ app.post('/webhook/github', (req, res) => {
   res.status(200).json({ ok: true });
 });
 
+// ── Telegram helpers ──────────────────────────────────────────────────────────
+async function sendTelegram(chatId, text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+    });
+  } catch (e) {
+    console.error('[telegram] send failed:', e.message);
+  }
+}
+
+function ackMessage(text, chatId) {
+  const t = text.toLowerCase().trim();
+  if (t.startsWith('assign ')) {
+    const ref = text.slice(7).trim();
+    return sendTelegram(chatId, `🚀 *Assigning ${ref}...*\nI'm on it — you'll get an update when it's done.`);
+  }
+  if (t === 'status' || t === 'status?') {
+    return sendTelegram(chatId, `🔍 *Checking status...*\nFetching latest sprint progress.`);
+  }
+  if (t.startsWith('stop')) {
+    return sendTelegram(chatId, `🛑 *Stop command received.* Halting current task.`);
+  }
+  // Generic ack for any other command
+  return sendTelegram(chatId, `⚙️ *Got it:* \`${text}\`\nProcessing...`);
+}
+
 // ── Telegram webhook ──────────────────────────────────────────────────────────
-app.post('/webhook/telegram', (req, res) => {
+app.post('/webhook/telegram', async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(200).json({ ok: true });
   if (String(message.chat?.id) !== String(process.env.TELEGRAM_CHAT_ID))
     return res.status(200).json({ ok: true });
 
+  const text = (message.text || '').trim();
+  const chatId = message.chat.id;
+
+  // Send immediate acknowledgment
+  await ackMessage(text, chatId);
+
   const task = {
     type:       'user_command',
-    text:       (message.text || '').trim(),
+    text,
     message_id: message.message_id,
-    chat_id:    message.chat.id,
+    chat_id:    chatId,
     timestamp:  new Date().toISOString(),
   };
   req.app.locals.enqueue(task);
@@ -97,6 +134,36 @@ function buildGithubTask(event, payload, repo) {
       title: payload.pull_request.title, branch: payload.pull_request.head.ref,
       base_branch: payload.pull_request.base.ref,
       url: payload.pull_request.html_url, timestamp: new Date().toISOString() };
+
+  // PR merged → close linked issue
+  if (event === 'pull_request' && payload.action === 'closed' && payload.pull_request.merged) {
+    return { type: 'pr_merged', repo, pr_number: payload.pull_request.number,
+      title: payload.pull_request.title, branch: payload.pull_request.head.ref,
+      url: payload.pull_request.html_url, timestamp: new Date().toISOString() };
+  }
+
+  // Review submitted → if REQUEST_CHANGES, agent must fix
+  if (event === 'pull_request_review' && payload.action === 'submitted') {
+    const state = payload.review?.state;
+    if (state === 'changes_requested') {
+      return { type: 'pr_changes_requested', repo,
+        pr_number: payload.pull_request.number,
+        title: payload.pull_request.title,
+        branch: payload.pull_request.head.ref,
+        url: payload.pull_request.html_url,
+        reviewer: payload.review.user.login,
+        review_body: payload.review.body || '',
+        timestamp: new Date().toISOString() };
+    }
+    if (state === 'approved') {
+      return { type: 'pr_approved', repo,
+        pr_number: payload.pull_request.number,
+        title: payload.pull_request.title,
+        url: payload.pull_request.html_url,
+        reviewer: payload.review.user.login,
+        timestamp: new Date().toISOString() };
+    }
+  }
 
   if (event === 'check_run' && payload.action === 'completed' && payload.check_run.conclusion === 'failure')
     return { type: 'ci_failed', repo, check_name: payload.check_run.name,
